@@ -244,9 +244,24 @@ async def get_ev_location(
         ble_charger_entity = f"switch.{ble_prefix}_charger"
         ble_state = hass.states.get(ble_charger_entity)
 
-        if ble_state and ble_state.state not in ("unavailable", "unknown", "None", None):
+        if ble_state:
+            # Entity exists — car was previously detected via BLE at this location.
+            # Even if unavailable (car asleep), it's still in the garage.
             location = "home"
-            _LOGGER.debug(f"Tesla BLE detected (fallback), assuming location=home")
+            _LOGGER.debug(f"Tesla BLE entity {ble_charger_entity} exists (state={ble_state.state}), assuming location=home")
+
+    # Location caching: remember last known location per vehicle.
+    # When car is asleep, all sensors are unavailable — cache lets us remember where it was.
+    # This prevents falsely assuming a car asleep at a shopping centre is plugged in at home.
+    domain_data = hass.data.get(DOMAIN)
+    if isinstance(domain_data, dict):
+        cache = domain_data.setdefault("_ev_location_cache", {})
+        cache_key = vehicle_vin or "_default"
+        if location == "unknown" and cache_key in cache:
+            location = cache[cache_key]
+            _LOGGER.debug(f"Using cached last known EV location for {cache_key}: {location}")
+        elif location != "unknown":
+            cache[cache_key] = location
 
     return location
 
@@ -409,16 +424,20 @@ async def is_ev_plugged_in(
                             _LOGGER.debug(f"Charge cable {entity_id} is {state.state} but car is home, treating as plugged in")
                             return True
                         elif location == "unknown":
-                            # Both cable AND location unknown — car fully asleep.
-                            # A sleeping car didn't drive away. Assume still plugged in at home.
-                            # Works for both BLE and Fleet/Teslemetry-only users.
+                            # Both cable AND location unknown, no cached location either.
+                            # Car fully asleep with no prior location data (e.g. first boot).
+                            # Assume plugged in — missing a charge window is worse than a no-op.
                             _LOGGER.debug(
                                 f"Charge cable {entity_id} is {state.state} and location unknown "
-                                f"(car asleep), assuming still plugged in"
+                                f"(car asleep, no cached location), assuming still plugged in"
                             )
                             return True
                         else:
-                            _LOGGER.debug(f"Charge cable {entity_id} is {state.state} and car {location}, treating as unplugged")
+                            # Cached or live location says car is away from home
+                            _LOGGER.debug(
+                                f"Charge cable {entity_id} is {state.state} and car at {location}, "
+                                f"treating as unplugged"
+                            )
                             return False
                     is_plugged = state.state == "on"
                     _LOGGER.debug(f"Found plugged in state from {entity_id} (VIN: {device_vin}): {is_plugged}")
@@ -3252,6 +3271,10 @@ class AutoScheduleExecutor:
     async def _get_vehicle_location(self, vehicle_id: str) -> str:
         """Get current location for a vehicle from Home Assistant entities.
 
+        Caches the last known location per vehicle so that when the car goes to
+        sleep (all entities unavailable), we can return where it was last seen
+        rather than "unknown".
+
         Args:
             vehicle_id: Vehicle identifier
 
@@ -3264,6 +3287,10 @@ class AutoScheduleExecutor:
             DEFAULT_TESLA_BLE_ENTITY_PREFIX,
         )
         from homeassistant.helpers import entity_registry as er, device_registry as dr
+
+        # Initialize location cache if needed
+        if not hasattr(self, '_location_cache'):
+            self._location_cache: Dict[str, str] = {}
 
         location = "unknown"
 
@@ -3352,6 +3379,16 @@ class AutoScheduleExecutor:
                 location = "home"
                 _LOGGER.debug(f"Tesla BLE entity {ble_charger_entity} exists (state={ble_state.state}), assuming location=home")
 
+        # Method 3 (fallback): Use last known location from cache
+        # If car is asleep and all sensors are unavailable, use where it was last seen.
+        if location == "unknown" and vehicle_id in self._location_cache:
+            location = self._location_cache[vehicle_id]
+            _LOGGER.debug(f"Using cached last known location for {vehicle_id}: {location}")
+
+        # Cache valid locations for future use when car goes to sleep
+        if location != "unknown":
+            self._location_cache[vehicle_id] = location
+
         return location
 
     async def _is_vehicle_plugged_in(self, vehicle_id: str) -> bool:
@@ -3407,16 +3444,20 @@ class AutoScheduleExecutor:
                                 _LOGGER.debug(f"Charge cable {entity_id} is {state.state} but car is home, treating as plugged in")
                                 return True
                             elif location == "unknown":
-                                # Both cable AND location unknown — car fully asleep.
-                                # A sleeping car didn't drive away. Assume still plugged in.
-                                # Works for both BLE and Fleet/Teslemetry-only users.
+                                # Both cable AND location unknown, no cached location either.
+                                # Car fully asleep with no prior location data (e.g. first boot).
+                                # Assume plugged in — missing a charge window is worse than a no-op.
                                 _LOGGER.debug(
                                     f"Charge cable {entity_id} is {state.state} and location unknown "
-                                    f"(car asleep), assuming still plugged in"
+                                    f"(car asleep, no cached location), assuming still plugged in"
                                 )
                                 return True
                             else:
-                                _LOGGER.debug(f"Charge cable {entity_id} is {state.state} and car {location}, treating as unplugged")
+                                # Cached or live location says car is away from home
+                                _LOGGER.debug(
+                                    f"Charge cable {entity_id} is {state.state} and car at {location}, "
+                                    f"treating as unplugged"
+                                )
                                 return False
                         is_plugged = state.state == "on"
                         _LOGGER.debug(f"Found plugged in state from {entity_id}: {is_plugged}")

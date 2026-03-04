@@ -798,11 +798,12 @@ class OptimizationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 effective_action = "self_consumption"
 
-            # When transitioning from IDLE to any other action, restore the
-            # work mode (FoxESS/Sungrow hold mode → normal).
-            # Note: we do NOT restore backup_reserve here — self_consumption
-            # should be able to run to 0% naturally. The backup_reserve floor
-            # is enforced only on force_discharge (optimizer-controlled export).
+            # When transitioning from IDLE to any other action, undo what
+            # IDLE did: restore work mode AND reset backup_reserve to the
+            # configured value. IDLE sets backup_reserve = current_soc to
+            # hold the battery; without resetting it, self_consumption would
+            # be stuck at that SOC level (Tesla won't discharge below
+            # backup_reserve even in self_consumption mode).
             prev = self._last_executed_action
             if (
                 prev == "idle"
@@ -814,9 +815,22 @@ class OptimizationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     and hasattr(self.energy_coordinator, "restore_work_mode_from_idle")
                 ):
                     await self.energy_coordinator.restore_work_mode_from_idle()
-                _LOGGER.info(
-                    "Optimizer: Exiting IDLE — restored work mode",
-                )
+                # Reset backup_reserve to configured value (e.g. 0% or 20%)
+                # so the battery can discharge naturally in self_consumption.
+                if hasattr(battery, "set_backup_reserve"):
+                    configured_reserve_pct = int(
+                        self._config.backup_reserve * 100
+                    )
+                    await battery.set_backup_reserve(configured_reserve_pct)
+                    _LOGGER.info(
+                        "Optimizer: Exiting IDLE — restored work mode and "
+                        "backup reserve to %d%%",
+                        configured_reserve_pct,
+                    )
+                else:
+                    _LOGGER.info(
+                        "Optimizer: Exiting IDLE — restored work mode",
+                    )
 
             if effective_action == "charge":
                 if hasattr(battery, "force_charge"):

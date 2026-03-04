@@ -736,19 +736,47 @@ class OptimizationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         battery = self._executor.battery_controller
 
-        # Check if force charge/discharge is active — skip optimizer execution.
-        # Force mode is manually triggered by the user and owns the battery state
-        # (backup_reserve, TOU tariff, operation mode). The optimizer must not
-        # override it regardless of what the LP schedule wants.
+        # Check if force charge/discharge is active.
+        # User-triggered force modes own the battery state — don't override.
+        # Optimizer-triggered force modes can be overridden if the LP changes
+        # its mind (e.g. LP planned 1 export step but now wants self_consumption).
         if self._force_state_getter:
             force_state = self._force_state_getter()
             if force_state and force_state.get("active"):
                 force_type = force_state.get("type", "unknown")
-                _LOGGER.debug(
-                    "Optimizer: force %s active — skipping action execution (LP wants %s)",
-                    force_type, action.action,
+                force_source = force_state.get("source", "user")
+
+                if force_source != "optimizer":
+                    # User-triggered — never override
+                    _LOGGER.debug(
+                        "Optimizer: force %s active (user) — skipping action execution "
+                        "(LP wants %s)",
+                        force_type, action.action,
+                    )
+                    return
+
+                # Optimizer-triggered: check if LP still wants the same action
+                lp_matches_force = (
+                    (force_type == "discharge" and action.action in ("discharge", "export"))
+                    or (force_type == "charge" and action.action == "charge")
                 )
-                return
+                if lp_matches_force:
+                    _LOGGER.debug(
+                        "Optimizer: force %s active (optimizer) — LP still wants %s, "
+                        "keeping force mode",
+                        force_type, action.action,
+                    )
+                    return
+
+                # LP changed its mind — cancel the optimizer's force mode
+                _LOGGER.info(
+                    "Optimizer: LP changed mind (%s → %s) — canceling optimizer-triggered "
+                    "force %s to execute new action",
+                    force_type, action.action, force_type,
+                )
+                battery = self._executor.battery_controller
+                if hasattr(battery, "restore_normal"):
+                    await battery.restore_normal()
 
         try:
             # During demand charge windows, override IDLE → self_consumption.

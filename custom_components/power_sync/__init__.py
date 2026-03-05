@@ -8711,6 +8711,22 @@ class ChargingScheduleView(HomeAssistantView):
             except ValueError:
                 priority = ChargingPriority.SOLAR_PREFERRED
 
+            # Look up per-vehicle charger params from vehicle_charging_configs
+            charger_power_kw = 7.0  # default
+            battery_capacity_kwh = 60.0  # default
+            store = self._get_store()
+            if store:
+                stored_data = getattr(store, '_data', {}) or {}
+                for vc in stored_data.get("vehicle_charging_configs", []):
+                    if vc.get("vehicle_id") == vehicle_id or vehicle_id == "_default":
+                        max_amps = vc.get("max_amps", 32)
+                        voltage = vc.get("voltage", 230)
+                        phases = vc.get("phases", 1)
+                        charger_power_kw = (max_amps * voltage * phases) / 1000
+                        if "battery_capacity_kwh" in vc:
+                            battery_capacity_kwh = vc["battery_capacity_kwh"]
+                        break
+
             # Generate plan
             plan = await planner.plan_charging(
                 vehicle_id=vehicle_id,
@@ -8718,6 +8734,8 @@ class ChargingScheduleView(HomeAssistantView):
                 target_soc=target_soc,
                 target_time=target_time,
                 priority=priority,
+                charger_power_kw=charger_power_kw,
+                battery_capacity_kwh=battery_capacity_kwh,
             )
 
             return web.json_response({
@@ -9581,6 +9599,7 @@ class AutoScheduleSettingsView(HomeAssistantView):
             plan_data = None
             try:
                 settings = executor.get_settings(vehicle_id)
+                executor._sync_charger_params_from_vehicle_configs(vehicle_id, settings)
                 state = executor.get_state(vehicle_id)
                 await executor._regenerate_plan(vehicle_id, settings, state)
                 if state.current_plan:

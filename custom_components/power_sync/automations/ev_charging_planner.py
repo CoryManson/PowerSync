@@ -3904,7 +3904,7 @@ class AutoScheduleExecutor:
                 target_soc=settings.target_soc,
                 target_time=target_time,
                 priority=effective_priority,
-                charger_power_kw=(settings.max_charge_amps * settings.voltage) / 1000,
+                charger_power_kw=(settings.max_charge_amps * settings.voltage * settings.phases) / 1000,
             )
 
             state.current_plan = plan

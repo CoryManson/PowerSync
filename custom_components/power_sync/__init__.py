@@ -18226,6 +18226,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     }
                 return {"active": False}
 
+            def clear_force_state() -> None:
+                """Clear force charge/discharge active flags and expiry timers.
+
+                Called by the optimizer when it cancels its own force mode
+                (LP changed mind). Clearing BEFORE restore_normal ensures
+                TOU sync is not skipped (it checks force_charge_state.active).
+                Saved tariff/mode/reserve are left intact so restore_normal
+                can still use them for the restore sequence.
+                """
+                force_charge_state["active"] = False
+                force_charge_state["expires_at"] = None
+                force_discharge_state["active"] = False
+                force_discharge_state["expires_at"] = None
+
             # Load settings from config entry (persisted from previous sessions)
             # Check options first (where set_settings saves), then fall back to data for defaults
             saved_cost_function = entry.options.get(CONF_OPTIMIZATION_COST_FUNCTION, entry.data.get(CONF_OPTIMIZATION_COST_FUNCTION, "self_consumption"))
@@ -18249,6 +18263,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 energy_coordinator=energy_coordinator,
                 tariff_schedule=tariff_schedule,  # For Globird/TOU-based pricing
                 force_state_getter=get_force_state,  # For checking if force mode is active
+                force_state_clearer=clear_force_state,  # For optimizer to clear before restore_normal
             )
 
             # Set up the coordinator

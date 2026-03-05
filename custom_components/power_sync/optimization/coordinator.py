@@ -92,6 +92,7 @@ class OptimizationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         energy_coordinator: Any | None = None,
         tariff_schedule: dict | None = None,
         force_state_getter: Callable[[], dict] | None = None,
+        force_state_clearer: Callable[[], None] | None = None,
         entry: Any | None = None,
         **kwargs,  # Ignore legacy feature flags
     ):
@@ -112,6 +113,7 @@ class OptimizationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.energy_coordinator = energy_coordinator
         self._tariff_schedule = tariff_schedule
         self._force_state_getter = force_state_getter
+        self._force_state_clearer = force_state_clearer
 
         # Configuration
         self._enabled = False
@@ -768,15 +770,34 @@ class OptimizationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     return
 
-                # LP changed its mind — cancel the optimizer's force mode
+                # LP changed its mind — cancel the optimizer's force mode.
+                # Clear force state BEFORE calling restore_normal so that
+                # TOU sync (triggered inside restore_normal) doesn't skip
+                # due to seeing force_charge_state["active"]=True.
                 _LOGGER.info(
                     "Optimizer: LP changed mind (%s → %s) — canceling optimizer-triggered "
                     "force %s to execute new action",
                     force_type, action.action, force_type,
                 )
+                if self._force_state_clearer:
+                    self._force_state_clearer()
                 battery = self._executor.battery_controller
                 if hasattr(battery, "restore_normal"):
                     await battery.restore_normal()
+                # Explicitly reset backup_reserve to configured value.
+                # restore_normal restores the value saved before force_charge
+                # started, but that value may have been corrupted (e.g. read
+                # 100% from Tesla API during a previous rapid force cycle).
+                if hasattr(battery, "set_backup_reserve"):
+                    configured_reserve_pct = int(
+                        self._config.backup_reserve * 100
+                    )
+                    await battery.set_backup_reserve(configured_reserve_pct)
+                    _LOGGER.info(
+                        "Optimizer: Reset backup reserve to configured %d%% "
+                        "after canceling force %s",
+                        configured_reserve_pct, force_type,
+                    )
 
         try:
             # During demand charge windows, override IDLE → self_consumption.

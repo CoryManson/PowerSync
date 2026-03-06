@@ -423,7 +423,7 @@
       },
       "demand_charges": {
         "title": "Demand Charge Configuration (Optional)",
-        "description": "Configure demand charge tracking for electricity plans with capacity-based fees. Demand charges are applied during peak periods based on your maximum power draw. Leave 'Enable Demand Charge Tracking' unchecked to skip this step.",
+        "description": "Configure demand charge tracking for electricity plans with capacity-based fees. Demand charges are applied during peak periods based on your maximum power draw. Leave 'Enable Demand Charge Tracking' unchecked to skip this step.\n\nEnjoy PowerSync? Consider [supporting development](https://github.com/sponsors/Bolagnaise).",
         "data": {
           "demand_charge_enabled": "Enable Demand Charge Tracking",
           "demand_charge_rate": "Demand Charge Rate ($/kW)",
@@ -980,7 +980,7 @@
       },
       "ev_charging_setup": {
         "title": "EV Charging & OCPP",
-        "description": "Configure EV charger control. Each section below is independent — only enable the one(s) that match your setup.\n\n**Tesla EV** — Control Tesla vehicle charging via API or Bluetooth.\n**OCPP** — Connect any OCPP 1.6-compliant charger (e.g. Wallbox, ABB, Easee).\n**Zaptec** — Connect Zaptec chargers via HA integration or direct Cloud API.",
+        "description": "Configure EV charger control. Each section below is independent — only enable the one(s) that match your setup.\n\n**Tesla EV** — Control Tesla vehicle charging via API or Bluetooth.\n**OCPP** — Connect any OCPP 1.6-compliant charger (e.g. Wallbox, ABB, Easee).\n**Zaptec** — Connect Zaptec chargers via HA integration or direct Cloud API.\n\nEnjoy PowerSync? Consider [supporting development](https://github.com/sponsors/Bolagnaise).",
         "data": {
           "ev_charging_enabled": "[Tesla] Enable EV Charging Control",
           "ev_provider": "[Tesla] Control Method",
@@ -1018,7 +1018,7 @@
       },
       "ev_charging": {
         "title": "EV Charging & OCPP",
-        "description": "Configure EV charger control. Each section below is independent — only enable the one(s) that match your setup.\n\n**Tesla EV** — Control Tesla vehicle charging via API or Bluetooth.\n**OCPP** — Connect any OCPP 1.6-compliant charger (e.g. Wallbox, ABB, Easee).\n**Zaptec** — Connect Zaptec chargers via HA integration or direct Cloud API.",
+        "description": "Configure EV charger control. Each section below is independent — only enable the one(s) that match your setup.\n\n**Tesla EV** — Control Tesla vehicle charging via API or Bluetooth.\n**OCPP** — Connect any OCPP 1.6-compliant charger (e.g. Wallbox, ABB, Easee).\n**Zaptec** — Connect Zaptec chargers via HA integration or direct Cloud API.\n\nEnjoy PowerSync? Consider [supporting development](https://github.com/sponsors/Bolagnaise).",
         "data": {
           "ev_charging_enabled": "[Tesla] Enable EV Charging Control",
           "ev_provider": "[Tesla] Control Method",

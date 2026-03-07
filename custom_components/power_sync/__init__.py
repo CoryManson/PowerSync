@@ -14767,26 +14767,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if all_success:
                 force_discharge_state["active"] = True
                 force_discharge_state["source"] = source
-                # For optimizer-triggered discharges, use the actual requested
-                # duration so the optimizer regains control quickly. The TOU
-                # tariff still covers the full 30-min period (Tesla API
-                # requirement), but the timer fires after the requested duration
-                # and restore_normal reverts the tariff.
-                # For user-triggered discharges, align to the period boundary
-                # so the user gets the full expected window.
-                if source == "optimizer":
-                    optimizer_expiry = dt_util.now() + timedelta(minutes=duration)
-                    force_discharge_state["expires_at"] = optimizer_expiry.astimezone(dt_util.UTC)
-                    actual_duration = duration
-                    _LOGGER.info(
-                        "FORCE DISCHARGE ACTIVE (optimizer): Tariff uploaded to %d gateway(s), "
-                        "expires in %dmin (not period-aligned)",
-                        len(site_configs), actual_duration,
-                    )
-                else:
-                    force_discharge_state["expires_at"] = actual_expiry.astimezone(dt_util.UTC)
-                    actual_duration = int((actual_expiry - dt_util.now()).total_seconds() / 60)
-                    _LOGGER.info(f"FORCE DISCHARGE ACTIVE: Tariff uploaded to {len(site_configs)} gateway(s), expires at {actual_expiry.strftime('%H:%M')} ({actual_duration} min)")
+                # Use the requested duration for the countdown timer, not the
+                # period-aligned tariff expiry. The TOU tariff window extends to
+                # the period boundary (Tesla API requirement) but the timer fires
+                # after the user's requested duration and restore_normal reverts.
+                requested_expiry = dt_util.now() + timedelta(minutes=duration)
+                force_discharge_state["expires_at"] = requested_expiry.astimezone(dt_util.UTC)
+                _LOGGER.info(
+                    "FORCE DISCHARGE ACTIVE%s: Tariff uploaded to %d gateway(s), "
+                    "expires in %dmin (tariff window to %s)",
+                    " (optimizer)" if source == "optimizer" else "",
+                    len(site_configs), duration, actual_expiry.strftime('%H:%M'),
+                )
 
                 # Dispatch event for switch entity
                 async_dispatcher_send(hass, f"{DOMAIN}_force_discharge_state", {
@@ -15428,17 +15420,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if all_success:
                 force_charge_state["active"] = True
                 force_charge_state["source"] = source
-                if source == "optimizer":
-                    optimizer_expiry = dt_util.now() + timedelta(minutes=duration)
-                    force_charge_state["expires_at"] = optimizer_expiry.astimezone(dt_util.UTC)
-                    _LOGGER.info(
-                        "FORCE CHARGE ACTIVE (optimizer): Tariff uploaded to %d gateway(s), "
-                        "expires in %dmin (not period-aligned)",
-                        len(site_configs), duration,
-                    )
-                else:
-                    force_charge_state["expires_at"] = actual_expiry.astimezone(dt_util.UTC)
-                    _LOGGER.info(f"FORCE CHARGE ACTIVE: Tariff uploaded to {len(site_configs)} gateway(s) for {duration} min, expires at {actual_expiry.strftime('%H:%M')}")
+                # Use the requested duration for the countdown timer, not the
+                # period-aligned tariff expiry. The TOU tariff window extends to
+                # the period boundary (Tesla API requirement) but the timer fires
+                # after the user's requested duration and restore_normal reverts.
+                requested_expiry = dt_util.now() + timedelta(minutes=duration)
+                force_charge_state["expires_at"] = requested_expiry.astimezone(dt_util.UTC)
+                _LOGGER.info(
+                    "FORCE CHARGE ACTIVE%s: Tariff uploaded to %d gateway(s), "
+                    "expires in %dmin (tariff window to %s)",
+                    " (optimizer)" if source == "optimizer" else "",
+                    len(site_configs), duration, actual_expiry.strftime('%H:%M'),
+                )
 
                 # Kick PW3 to ensure it starts charging immediately
                 hass.async_create_task(_tesla_charge_kick("force_charge"))

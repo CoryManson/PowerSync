@@ -936,8 +936,22 @@ async def async_setup_entry(
 
             _LOGGER.info("Flow Power price sensors added (import, export, and TWAP)")
 
-    # Always add battery health sensor (receives data from mobile app)
-    entities.append(BatteryHealthSensor(entry=entry))
+    # Always add battery health sensor
+    # For non-Tesla systems, pass coordinator so it can read battery_soh
+    battery_system = "tesla"
+    if is_foxess:
+        battery_system = "foxess"
+    elif is_goodwe:
+        battery_system = "goodwe"
+    elif is_sungrow:
+        battery_system = "sungrow"
+    elif is_sigenergy:
+        battery_system = "sigenergy"
+    entities.append(BatteryHealthSensor(
+        entry=entry,
+        coordinator=energy_coordinator,
+        battery_system=battery_system,
+    ))
     _LOGGER.info("Battery health sensor added")
 
     # Always add battery mode sensor (for automation triggers)
@@ -2545,14 +2559,15 @@ class FlowPowerAmberComparisonSensor(SensorEntity):
 
 
 class BatteryHealthSensor(SensorEntity):
-    """Sensor for battery health data from mobile app TEDAPI scans.
+    """Sensor for battery health / state of health.
 
-    This sensor receives data from the sync_battery_health service call
-    made by the mobile app after scanning the Powerwall via TEDAPI.
+    Data sources:
+    - Tesla: TEDAPI scan via mobile app (capacity-based, with per-battery breakdown)
+    - Sungrow/Sigenergy/GoodWe: battery_soh from coordinator (Modbus SOH%)
+    - FoxESS: no SOH register available (shows Unknown)
 
-    Shows battery health as a percentage of original capacity.
-    Can be > 100% if batteries have more capacity than rated spec.
-    Individual battery data is available in attributes.
+    Shows battery health as a percentage. Tesla can be > 100% if batteries
+    have more capacity than rated spec.
     """
 
     _attr_has_entity_name = True
@@ -2564,6 +2579,8 @@ class BatteryHealthSensor(SensorEntity):
     def __init__(
         self,
         entry: ConfigEntry,
+        coordinator=None,
+        battery_system: str = "tesla",
     ) -> None:
         """Initialize the sensor."""
         self._entry = entry
@@ -2571,7 +2588,12 @@ class BatteryHealthSensor(SensorEntity):
         # HA 2026.2.0+ requires lowercase suggested_object_id
         self._attr_suggested_object_id = f"power_sync_{SENSOR_TYPE_BATTERY_HEALTH}"
 
-        # Battery health data (from service call)
+        # Energy coordinator for reading battery_soh (non-Tesla systems)
+        self._coordinator = coordinator
+        self._battery_system = battery_system
+        self._soh_percent: float | None = None
+
+        # Battery health data (from TEDAPI service call)
         self._original_capacity_wh: float | None = None
         self._current_capacity_wh: float | None = None
         self._degradation_percent: float | None = None
@@ -2609,6 +2631,15 @@ class BatteryHealthSensor(SensorEntity):
             self._individual_batteries = stored_health.get("individual_batteries")
             _LOGGER.info(f"Restored battery health from storage: {self._calculate_health_percent()}% health")
 
+        # For non-Tesla systems: listen to coordinator updates for battery_soh
+        if self._coordinator is not None and self._battery_system != "tesla":
+            self.async_on_remove(
+                self._coordinator.async_add_listener(self._handle_coordinator_update)
+            )
+            # Read initial value if coordinator already has data
+            if self._coordinator.data:
+                self._handle_coordinator_update()
+
     @callback
     def _handle_battery_health_update(self, data: dict[str, Any]) -> None:
         """Handle battery health update from service call."""
@@ -2625,6 +2656,17 @@ class BatteryHealthSensor(SensorEntity):
         )
         self.async_write_ha_state()
 
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle coordinator data update — read battery_soh."""
+        if not self._coordinator or not self._coordinator.data:
+            return
+        data = self._coordinator.data
+        soh = data.get("battery_soh")
+        if soh is not None and soh > 0:
+            self._soh_percent = round(float(soh), 1)
+            self.async_write_ha_state()
+
     def _calculate_health_percent(self) -> float | None:
         """Calculate health as percentage of original capacity."""
         if self._current_capacity_wh is not None and self._original_capacity_wh is not None and self._original_capacity_wh > 0:
@@ -2636,8 +2678,14 @@ class BatteryHealthSensor(SensorEntity):
         """Return the battery health as percentage of original capacity.
 
         Can be > 100% if batteries have more capacity than rated spec.
+        Falls back to direct SOH% from coordinator for non-Tesla systems.
         """
-        return self._calculate_health_percent()
+        # TEDAPI capacity-based health (Tesla)
+        health = self._calculate_health_percent()
+        if health is not None:
+            return health
+        # Direct SOH from coordinator (Sungrow, Sigenergy, GoodWe)
+        return self._soh_percent
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -2689,7 +2737,12 @@ class BatteryHealthSensor(SensorEntity):
                     if battery.get("isExpansion") is not None:
                         attributes[f"{prefix}_is_expansion"] = battery.get("isExpansion")
 
-        attributes["source"] = "mobile_app_tedapi"
+        # Source attribution
+        if self._original_capacity_wh is not None:
+            attributes["source"] = "mobile_app_tedapi"
+        elif self._soh_percent is not None:
+            attributes["source"] = "inverter_modbus"
+            attributes["state_of_health_percent"] = self._soh_percent
 
         return attributes
 

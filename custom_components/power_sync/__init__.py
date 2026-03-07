@@ -10407,7 +10407,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     has_amber = bool(entry.data.get(CONF_AMBER_API_TOKEN))
 
     # Determine correct title based on provider
-    if electricity_provider == "globird" or (not has_amber and entry.data.get(CONF_AEMO_SPIKE_ENABLED)):
+    if electricity_provider == "aemo_vpp":
+        expected_title = "PowerSync AEMO"
+    elif electricity_provider == "globird" or (not has_amber and entry.data.get(CONF_AEMO_SPIKE_ENABLED)):
         expected_title = "PowerSync Globird"
     elif electricity_provider == "flow_power":
         expected_title = "PowerSync Flow Power"

@@ -520,6 +520,7 @@
       "no_station_selected": "Please select a Sigenergy station.",
       "modbus_host_required": "Sigenergy IP address is required for energy data.",
       "sungrow_host_required": "Sungrow IP address is required for Modbus connection.",
+      "modbus_conflict": "Connected to inverter but received invalid data (SOC > 100%). This usually means another integration (e.g. modbus_manager, sungrow) is also using Modbus on the same port. Disable other Modbus integrations for this inverter and try again.",
       "sungrow_modbus_conflict": "The AC inverter and Sungrow battery have the same IP, port, and slave ID. Use a different slave ID for the AC inverter.",
       "foxess_host_required": "FoxESS IP address is required for Modbus TCP connection.",
       "foxess_tcp_failed": "Cannot connect to FoxESS inverter via Modbus TCP. Check: (1) IP address is correct — H3 Smart shows as 'espressif' on your network, (2) inverter firmware is up to date, (3) port 502 is accessible.",

@@ -488,10 +488,21 @@ async def test_sungrow_connection(
             # Try to read battery SOC as a connection test
             data = await controller.get_battery_data()
             if data and "battery_soc" in data:
+                soc = data.get("battery_soc", 0)
+                soh = data.get("battery_soh", 0)
+                # Reject garbage Modbus reads (0xFFFF = 6553.5%)
+                # Often caused by another integration holding the Modbus port
+                if soc > 100 or soh > 100:
+                    _LOGGER.warning(
+                        "Sungrow connection test returned invalid SOC=%.1f%% SOH=%.1f%% "
+                        "(possible Modbus conflict — check for other integrations using port %d)",
+                        soc, soh, port,
+                    )
+                    return {"success": False, "error": "modbus_conflict"}
                 return {
                     "success": True,
-                    "battery_soc": data.get("battery_soc"),
-                    "battery_soh": data.get("battery_soh"),
+                    "battery_soc": soc,
+                    "battery_soh": soh,
                 }
             else:
                 return {"success": False, "error": "cannot_connect"}

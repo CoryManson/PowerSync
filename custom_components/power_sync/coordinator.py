@@ -2349,12 +2349,22 @@ class SungrowEnergyCoordinator(DataUpdateCoordinator):
             buy, sell = _get_current_prices(self.hass, self._entry_id)
             self._energy_acc.update(max(0, solar_kw), grid_kw, battery_kw, load_kw, buy, sell)
 
+            # Sanity-check SOC — 0xFFFF (6553.5%) means Modbus returned invalid data
+            raw_soc = data.get("battery_soc", 0)
+            if raw_soc > 100:
+                _LOGGER.warning(
+                    "Sungrow returned invalid SOC=%.1f%% (possible Modbus conflict). "
+                    "Check for other integrations using port 502.",
+                    raw_soc,
+                )
+                raw_soc = 0
+
             energy_data = {
                 "solar_power": max(0, solar_kw),  # kW, clamp to 0 if calculated negative
                 "grid_power": grid_kw,  # kW, positive = importing, negative = exporting
                 "battery_power": battery_kw,  # kW, positive = discharging, negative = charging
                 "load_power": load_kw,  # kW
-                "battery_level": data.get("battery_soc", 0),  # %
+                "battery_level": raw_soc,  # %
                 "last_update": dt_util.utcnow(),
                 # Sungrow-specific data
                 "battery_soh": data.get("battery_soh"),  # % State of Health

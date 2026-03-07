@@ -1447,13 +1447,19 @@ function _batteryHealth(e) {
       },
       {
         type: 'markdown',
-        content: `{% set original = state_attr('${healthEntity}', 'original_capacity_kwh') %}
+        content: `{% set source = state_attr('${healthEntity}', 'source') %}
+{% set original = state_attr('${healthEntity}', 'original_capacity_kwh') %}
 {% set current = state_attr('${healthEntity}', 'current_capacity_kwh') %}
 {% set scan = state_attr('${healthEntity}', 'last_scan') %}
-{%- if states('${healthEntity}') not in ['unavailable', 'unknown'] %}
+{% set soh = state_attr('${healthEntity}', 'state_of_health_percent') %}
+{%- if source == 'mobile_app_tedapi' %}
 **Capacity:** {{ current }} / {{ original }} kWh | **Last scan:** {{ scan[:10] if scan else 'N/A' }}
+{%- elif source == 'inverter_modbus' %}
+**State of Health:** {{ soh }}% (from inverter)
+{%- elif states('${healthEntity}') not in ['unavailable', 'unknown'] %}
+**Health:** {{ states('${healthEntity}') }}%
 {%- else %}
-Scan from the PowerSync Mobile app while connected to your battery system's WiFi.
+No battery health data available yet.
 {%- endif %}`,
       },
     ],

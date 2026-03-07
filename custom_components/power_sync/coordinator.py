@@ -2432,13 +2432,21 @@ class SungrowEnergyCoordinator(DataUpdateCoordinator):
                 "energy_summary": self._build_energy_summary(data),
             }
 
+            es = energy_data["energy_summary"]
             _LOGGER.debug(
-                "Sungrow data: solar=%.2f kW, grid=%.2f kW, battery=%.2f kW (%.0f%%), load=%.2f kW",
+                "Sungrow data: solar=%.2f kW, grid=%.2f kW, battery=%.2f kW (%.0f%%), load=%.2f kW | "
+                "daily: pv=%.2f import=%.2f export=%.2f charge=%.2f discharge=%.2f load=%.2f kWh",
                 energy_data["solar_power"],
                 energy_data["grid_power"],
                 energy_data["battery_power"],
                 energy_data["battery_level"],
                 energy_data["load_power"],
+                es.get("pv_today_kwh", 0),
+                es.get("grid_import_today_kwh", 0),
+                es.get("grid_export_today_kwh", 0),
+                es.get("charge_today_kwh", 0),
+                es.get("discharge_today_kwh", 0),
+                es.get("load_today_kwh", 0),
             )
 
             return energy_data

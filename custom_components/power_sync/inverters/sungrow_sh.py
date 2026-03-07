@@ -66,6 +66,7 @@ class SungrowSHController(InverterController):
     REG_LOAD_POWER = 13007             # 13008-13009 - Load power (W, S32)
     REG_EXPORT_POWER = 13009           # 13010-13011 - Export power (W, S32)
     REG_TOTAL_ACTIVE_POWER = 13033     # 13034-13035 - Total active power (W, S32)
+    REG_TOTAL_DC_POWER = 5016          # 5017-5018 - Total DC power from PV (W, U32)
 
     # Battery
     REG_BATTERY_VOLTAGE = 13019        # 13020 - Battery voltage (V * 0.1)
@@ -312,6 +313,47 @@ class SungrowSHController(InverterController):
         """
         return (reg1 << 16) | reg0  # reg1=high, reg0=low (Sungrow word-swap)
 
+    # Maximum sane power reading (100 kW) — anything above indicates the S32
+    # pair is actually two independent U16 registers (seen on SH10RS firmware)
+    _POWER_SANITY_W = 100_000
+
+    def _read_power_s32_with_fallback(
+        self, regs: list, label: str,
+    ) -> int:
+        """Read a 32-bit power register with sanity fallback to 16-bit.
+
+        Some Sungrow firmware (e.g. SH10RS) uses independent U16 registers
+        at doc 13008/13009 instead of one S32 pair. When the S32 interpretation
+        exceeds _POWER_SANITY_W, fall back to the individual register that
+        most likely holds the actual power value.
+        """
+        s32_val = self._to_signed32(regs[0], regs[1])
+        if abs(s32_val) <= self._POWER_SANITY_W:
+            return s32_val
+
+        # S32 is garbage — try individual U16/S16 registers
+        r0_signed = self._to_signed16(regs[0])
+        r1_signed = self._to_signed16(regs[1])
+
+        # Pick the register with the more reasonable value
+        # (on SH10RS, one register has load power, the other has export/grid)
+        if abs(r0_signed) <= self._POWER_SANITY_W and abs(r1_signed) <= self._POWER_SANITY_W:
+            # Both are sane — use the larger absolute value (more likely to be load)
+            chosen = r0_signed if abs(r0_signed) >= abs(r1_signed) else r1_signed
+        elif abs(r0_signed) <= self._POWER_SANITY_W:
+            chosen = r0_signed
+        elif abs(r1_signed) <= self._POWER_SANITY_W:
+            chosen = r1_signed
+        else:
+            chosen = 0  # Both are garbage
+
+        _LOGGER.debug(
+            "Sungrow %s: S32=%d is nonsensical (>%dW), using S16 fallback=%d "
+            "(raw regs=[%d, %d])",
+            label, s32_val, self._POWER_SANITY_W, chosen, regs[0], regs[1],
+        )
+        return chosen
+
     async def _read_all_registers(self) -> dict:
         """Read all SH series registers and return as attributes dict."""
         attrs = {}
@@ -341,20 +383,31 @@ class SungrowSHController(InverterController):
             if total_pv and len(total_pv) >= 2:
                 attrs["total_pv_generation"] = round(self._to_unsigned32(total_pv[0], total_pv[1]) * 0.1, 1)
 
-            # Read load power (32-bit signed)
+            # Read load power (S32 with U16 fallback for older firmware)
             load_power = await self._read_input_register(self.REG_LOAD_POWER, 2)
             if load_power and len(load_power) >= 2:
-                attrs["load_power"] = self._to_signed32(load_power[0], load_power[1])
+                attrs["load_power"] = self._read_power_s32_with_fallback(
+                    load_power, "load_power",
+                )
 
-            # Read export power (32-bit signed)
+            # Read export power (S32 with U16 fallback)
             export_power = await self._read_input_register(self.REG_EXPORT_POWER, 2)
             if export_power and len(export_power) >= 2:
-                attrs["export_power"] = self._to_signed32(export_power[0], export_power[1])
+                attrs["export_power"] = self._read_power_s32_with_fallback(
+                    export_power, "export_power",
+                )
 
-            # Read total active power (32-bit signed)
+            # Read total active power (S32 with U16 fallback)
             active_power = await self._read_input_register(self.REG_TOTAL_ACTIVE_POWER, 2)
             if active_power and len(active_power) >= 2:
-                attrs["active_power"] = self._to_signed32(active_power[0], active_power[1])
+                attrs["active_power"] = self._read_power_s32_with_fallback(
+                    active_power, "active_power",
+                )
+
+            # Read PV DC power (doc 5017-5018, U32, for direct solar measurement)
+            pv_dc = await self._read_input_register(self.REG_TOTAL_DC_POWER, 2)
+            if pv_dc and len(pv_dc) >= 2:
+                attrs["pv_power"] = self._to_unsigned32(pv_dc[0], pv_dc[1])
 
             # Read daily import/export
             daily_import = await self._read_input_register(self.REG_DAILY_IMPORT, 1)
@@ -912,15 +965,24 @@ class SungrowSHController(InverterController):
             if daily_charge:
                 data["daily_battery_charge"] = round(daily_charge[0] * 0.1, 2)
 
-            # Read load power (32-bit signed)
+            # Read load power (S32 with U16 fallback for older firmware)
             load_power = await self._read_input_register(self.REG_LOAD_POWER, 2)
             if load_power and len(load_power) >= 2:
-                data["load_power"] = self._to_signed32(load_power[0], load_power[1])
+                data["load_power"] = self._read_power_s32_with_fallback(
+                    load_power, "load_power",
+                )
 
-            # Read export power (32-bit signed)
+            # Read export power (S32 with U16 fallback)
             export_power = await self._read_input_register(self.REG_EXPORT_POWER, 2)
             if export_power and len(export_power) >= 2:
-                data["export_power"] = self._to_signed32(export_power[0], export_power[1])
+                data["export_power"] = self._read_power_s32_with_fallback(
+                    export_power, "export_power",
+                )
+
+            # Read PV DC power (doc 5017-5018, U32, for direct solar measurement)
+            pv_dc = await self._read_input_register(self.REG_TOTAL_DC_POWER, 2)
+            if pv_dc and len(pv_dc) >= 2:
+                data["pv_power"] = self._to_unsigned32(pv_dc[0], pv_dc[1])
 
             # Read EMS mode
             ems_mode = await self._read_register(self.REG_EMS_MODE, 1)

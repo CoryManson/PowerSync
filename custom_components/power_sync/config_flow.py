@@ -4785,7 +4785,7 @@ class TeslaAmberSyncOptionsFlow(config_entries.OptionsFlow):
         """Step 2c: Globird specific options."""
         if user_input is not None:
             # Add provider to the data
-            user_input[CONF_ELECTRICITY_PROVIDER] = "globird"
+            user_input[CONF_ELECTRICITY_PROVIDER] = self._provider
 
             # If spike not enabled, ensure region/threshold don't cause issues
             if not user_input.get(CONF_AEMO_SPIKE_ENABLED, False):

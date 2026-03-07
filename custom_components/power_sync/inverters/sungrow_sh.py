@@ -293,16 +293,24 @@ class SungrowSHController(InverterController):
             return value - 0x10000
         return value
 
-    def _to_signed32(self, high: int, low: int) -> int:
-        """Convert two unsigned 16-bit registers to signed 32-bit."""
-        value = (high << 16) | low
+    def _to_signed32(self, reg0: int, reg1: int) -> int:
+        """Convert two unsigned 16-bit registers to signed 32-bit.
+
+        Sungrow SH uses word-swapped 32-bit values: first register is the
+        LOW word, second register is the HIGH word (confirmed by mkaiser's
+        reference implementation which uses swap: word for all S32/U32).
+        """
+        value = (reg1 << 16) | reg0  # reg1=high, reg0=low (Sungrow word-swap)
         if value >= 0x80000000:
             return value - 0x100000000
         return value
 
-    def _to_unsigned32(self, high: int, low: int) -> int:
-        """Convert two unsigned 16-bit registers to unsigned 32-bit."""
-        return (high << 16) | low
+    def _to_unsigned32(self, reg0: int, reg1: int) -> int:
+        """Convert two unsigned 16-bit registers to unsigned 32-bit.
+
+        Sungrow SH uses word-swapped format: reg0=low word, reg1=high word.
+        """
+        return (reg1 << 16) | reg0  # reg1=high, reg0=low (Sungrow word-swap)
 
     async def _read_all_registers(self) -> dict:
         """Read all SH series registers and return as attributes dict."""

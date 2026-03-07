@@ -10458,9 +10458,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data.get(CONF_OCTOPUS_PRODUCT_CODE)
     )
 
-    # Check for TOU-tariff-only providers (Globird, etc.) that use Tesla tariff schedule
-    # These providers don't need real-time pricing API - they use the TOU schedule from Tesla
-    has_tou_tariff_provider = electricity_provider in ("globird", "tou_only", "other", "nz")
+    # Check for custom tariff providers (Globird, AEMO VPP, etc.)
+    # These don't need a real-time pricing API — they use a TOU schedule from config
+    # (synced to Tesla if Tesla, or used directly for Sungrow/FoxESS/etc.)
+    has_custom_tariff_provider = electricity_provider in ("globird", "aemo_vpp", "tou_only", "other", "nz")
     has_tesla_site = bool(entry.data.get(CONF_TESLA_ENERGY_SITE_ID))
 
     if has_amber:
@@ -10473,8 +10474,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info("Running in Octopus Energy UK mode with dynamic pricing")
     elif aemo_spike_enabled:
         _LOGGER.info("Running in AEMO Spike Detection only mode (%s)", electricity_provider)
-    elif has_tou_tariff_provider and has_tesla_site:
-        _LOGGER.info("Running in TOU Tariff mode (%s) - using Tesla tariff schedule for pricing", electricity_provider)
+    elif has_custom_tariff_provider:
+        _LOGGER.info("Running in custom tariff mode (%s)", electricity_provider)
     else:
         _LOGGER.error("No pricing source configured (provider: %s, aemo_spike: %s, tesla_site: %s)",
                      electricity_provider, aemo_spike_enabled, has_tesla_site)

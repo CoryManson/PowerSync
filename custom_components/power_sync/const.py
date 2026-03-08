@@ -95,6 +95,12 @@ CONF_OCPP_ENABLED = "ocpp_enabled"
 CONF_OCPP_PORT = "ocpp_port"
 DEFAULT_OCPP_PORT = 9000
 
+# Generic Charger configuration
+CONF_GENERIC_CHARGER_ENABLED = "generic_charger_enabled"
+CONF_GENERIC_CHARGER_SWITCH_ENTITY = "generic_charger_switch_entity"
+CONF_GENERIC_CHARGER_AMPS_ENTITY = "generic_charger_amps_entity"
+CONF_GENERIC_CHARGER_STATUS_ENTITY = "generic_charger_status_entity"
+
 # Battery System Selection
 CONF_BATTERY_SYSTEM = "battery_system"
 BATTERY_SYSTEM_TESLA = "tesla"

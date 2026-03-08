@@ -18067,9 +18067,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             if vc_phases is None:
                                 vc_phases = 1
 
+                            # Determine charger_type: vehicle config > config entry > default
+                            vc_charger_type = vc.get("charger_type")
+                            if not vc_charger_type:
+                                from .const import CONF_GENERIC_CHARGER_ENABLED, CONF_GENERIC_CHARGER_SWITCH_ENTITY, CONF_GENERIC_CHARGER_AMPS_ENTITY
+                                _opts = {**entry.data, **entry.options}
+                                if _opts.get(CONF_GENERIC_CHARGER_ENABLED):
+                                    vc_charger_type = "generic"
+                                    if not vc.get("charger_switch_entity"):
+                                        vc["charger_switch_entity"] = _opts.get(CONF_GENERIC_CHARGER_SWITCH_ENTITY, "")
+                                    if not vc.get("charger_amps_entity"):
+                                        vc["charger_amps_entity"] = _opts.get(CONF_GENERIC_CHARGER_AMPS_ENTITY, "")
+                                elif _opts.get("ocpp_enabled"):
+                                    vc_charger_type = "ocpp"
+                                else:
+                                    vc_charger_type = "tesla"
+
                             params = {
                                 "dynamic_mode": "solar_surplus",
-                                "charger_type": vc.get("charger_type", "tesla"),
+                                "charger_type": vc_charger_type,
                                 "min_charge_amps": vc.get("min_amps", 5),
                                 "max_charge_amps": vc.get("max_amps", 32),
                                 "voltage": vc.get("voltage", 240),

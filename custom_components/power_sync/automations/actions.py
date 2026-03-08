@@ -2283,12 +2283,22 @@ async def _set_vehicle_amps(
 
     elif charger_type == "generic":
         # Use HA service calls to switch and number entities
+        # Supports two modes:
+        #   1) Switch + optional amps: switch on/off to start/stop, amps to set rate
+        #   2) Amps-only (no switch): set amps to 0 to pause, >0 to charge
+        #      (e.g. Evnex pauses at <=5A — the min_charge_amps floor handles this)
         switch_entity = params.get("charger_switch_entity")
         amps_entity = params.get("charger_amps_entity")
 
         try:
             if amps == 0:
-                # Turn off charger
+                # Stop/pause charging
+                if amps_entity:
+                    await hass.services.async_call(
+                        "number", "set_value",
+                        {"entity_id": amps_entity, "value": 0},
+                        blocking=True
+                    )
                 if switch_entity:
                     await hass.services.async_call(
                         "switch", "turn_off",

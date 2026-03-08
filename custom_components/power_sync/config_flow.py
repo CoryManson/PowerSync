@@ -203,6 +203,11 @@ from .const import (
     CONF_ZAPTEC_PASSWORD,
     CONF_ZAPTEC_CHARGER_ID,
     CONF_ZAPTEC_INSTALLATION_ID_CLOUD,
+    # Generic charger configuration
+    CONF_GENERIC_CHARGER_ENABLED,
+    CONF_GENERIC_CHARGER_SWITCH_ENTITY,
+    CONF_GENERIC_CHARGER_AMPS_ENTITY,
+    CONF_GENERIC_CHARGER_STATUS_ENTITY,
     # Solcast Solar Forecast configuration
     CONF_SOLCAST_ENABLED,
     CONF_SOLCAST_API_KEY,
@@ -2944,6 +2949,10 @@ class TeslaAmberSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_ZAPTEC_STANDALONE_ENABLED,
                     default=False,
                 ): bool,
+                vol.Optional(CONF_GENERIC_CHARGER_ENABLED, default=False): bool,
+                vol.Optional(CONF_GENERIC_CHARGER_SWITCH_ENTITY, default=""): str,
+                vol.Optional(CONF_GENERIC_CHARGER_AMPS_ENTITY, default=""): str,
+                vol.Optional(CONF_GENERIC_CHARGER_STATUS_ENTITY, default=""): str,
             }),
         )
 
@@ -3002,6 +3011,18 @@ class TeslaAmberSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                      CONF_ZAPTEC_CHARGER_ID, CONF_ZAPTEC_INSTALLATION_ID_CLOUD):
             if key in ev_input:
                 data[key] = ev_input[key]
+
+        # Add Generic charger settings
+        data[CONF_GENERIC_CHARGER_ENABLED] = ev_input.get(CONF_GENERIC_CHARGER_ENABLED, False)
+        switch_entity = ev_input.get(CONF_GENERIC_CHARGER_SWITCH_ENTITY, "")
+        if switch_entity:
+            data[CONF_GENERIC_CHARGER_SWITCH_ENTITY] = switch_entity
+        amps_entity = ev_input.get(CONF_GENERIC_CHARGER_AMPS_ENTITY, "")
+        if amps_entity:
+            data[CONF_GENERIC_CHARGER_AMPS_ENTITY] = amps_entity
+        status_entity = ev_input.get(CONF_GENERIC_CHARGER_STATUS_ENTITY, "")
+        if status_entity:
+            data[CONF_GENERIC_CHARGER_STATUS_ENTITY] = status_entity
 
         # Set appropriate title based on provider
         if self._aemo_only_mode:
@@ -4459,6 +4480,23 @@ class TeslaAmberSyncOptionsFlow(config_entries.OptionsFlow):
                 CONF_ZAPTEC_STANDALONE_ENABLED,
                 default=self._get_option(CONF_ZAPTEC_STANDALONE_ENABLED, False),
             ): bool,
+            # Generic charger
+            vol.Optional(
+                CONF_GENERIC_CHARGER_ENABLED,
+                default=self._get_option(CONF_GENERIC_CHARGER_ENABLED, False),
+            ): bool,
+            vol.Optional(
+                CONF_GENERIC_CHARGER_SWITCH_ENTITY,
+                default=self._get_option(CONF_GENERIC_CHARGER_SWITCH_ENTITY, ""),
+            ): str,
+            vol.Optional(
+                CONF_GENERIC_CHARGER_AMPS_ENTITY,
+                default=self._get_option(CONF_GENERIC_CHARGER_AMPS_ENTITY, ""),
+            ): str,
+            vol.Optional(
+                CONF_GENERIC_CHARGER_STATUS_ENTITY,
+                default=self._get_option(CONF_GENERIC_CHARGER_STATUS_ENTITY, ""),
+            ): str,
         }
 
         return self.async_show_form(
@@ -4508,6 +4546,18 @@ class TeslaAmberSyncOptionsFlow(config_entries.OptionsFlow):
                      CONF_ZAPTEC_CHARGER_ID, CONF_ZAPTEC_INSTALLATION_ID_CLOUD):
             if key in ev_input:
                 final_data[key] = ev_input[key]
+
+        # Add Generic charger settings
+        final_data[CONF_GENERIC_CHARGER_ENABLED] = ev_input.get(CONF_GENERIC_CHARGER_ENABLED, False)
+        generic_switch = ev_input.get(CONF_GENERIC_CHARGER_SWITCH_ENTITY, "")
+        if generic_switch:
+            final_data[CONF_GENERIC_CHARGER_SWITCH_ENTITY] = generic_switch
+        generic_amps = ev_input.get(CONF_GENERIC_CHARGER_AMPS_ENTITY, "")
+        if generic_amps:
+            final_data[CONF_GENERIC_CHARGER_AMPS_ENTITY] = generic_amps
+        generic_status = ev_input.get(CONF_GENERIC_CHARGER_STATUS_ENTITY, "")
+        if generic_status:
+            final_data[CONF_GENERIC_CHARGER_STATUS_ENTITY] = generic_status
 
         return self.async_create_entry(title="", data=final_data)
 

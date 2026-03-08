@@ -990,7 +990,11 @@
           "ocpp_port": "[OCPP] WebSocket Port",
           "zaptec_charger_entity": "[Zaptec] Charger Entity (HA Integration)",
           "zaptec_installation_id": "[Zaptec] Installation ID",
-          "zaptec_standalone_enabled": "[Zaptec] Enable Standalone Cloud API"
+          "zaptec_standalone_enabled": "[Zaptec] Enable Standalone Cloud API",
+          "generic_charger_enabled": "[Generic] Enable Generic Charger",
+          "generic_charger_switch_entity": "[Generic] Charger Switch Entity",
+          "generic_charger_amps_entity": "[Generic] Charger Amps Entity",
+          "generic_charger_status_entity": "[Generic] Connector Status Sensor"
         },
         "data_description": {
           "ev_charging_enabled": "Enable smart charging control for Tesla vehicles. Not required for OCPP or Zaptec chargers.",
@@ -1000,7 +1004,11 @@
           "ocpp_port": "Port for OCPP WebSocket server. Default: 9000.",
           "zaptec_charger_entity": "Entity ID from the Zaptec HA integration (e.g. switch.zaptec_charger). Leave blank if not using Zaptec or if using standalone mode.",
           "zaptec_installation_id": "Installation device ID for current limiting. Found in the Zaptec HA integration device list. Leave blank to auto-detect.",
-          "zaptec_standalone_enabled": "Connect directly to Zaptec Cloud API without the Zaptec HA integration. You'll be prompted for your Zaptec account credentials on the next page."
+          "zaptec_standalone_enabled": "Connect directly to Zaptec Cloud API without the Zaptec HA integration. You'll be prompted for your Zaptec account credentials on the next page.",
+          "generic_charger_enabled": "Control any EV charger that has a switch and optional amps entity in Home Assistant (e.g. Evnex, Wallbox, or any charger with an HA integration).",
+          "generic_charger_switch_entity": "Entity ID of the switch that starts/stops charging (e.g. switch.evnex_charge_now). Required.",
+          "generic_charger_amps_entity": "Entity ID of the number that controls charge current in amps (e.g. number.evnex_connector_1_maximum_current). Leave blank if your charger doesn't support amp control.",
+          "generic_charger_status_entity": "Entity ID of a sensor that reports charger connector status (e.g. sensor.home_charger_connector_status). Used to detect if an EV is plugged in. Recognised states: charging, preparing, suspended_evse, suspended_ev, finishing. Leave blank to skip plug detection."
         },
         "submit_button": "Submit"
       },
@@ -1028,7 +1036,11 @@
           "ocpp_port": "[OCPP] WebSocket Port",
           "zaptec_charger_entity": "[Zaptec] Charger Entity (HA Integration)",
           "zaptec_installation_id": "[Zaptec] Installation ID",
-          "zaptec_standalone_enabled": "[Zaptec] Enable Standalone Cloud API"
+          "zaptec_standalone_enabled": "[Zaptec] Enable Standalone Cloud API",
+          "generic_charger_enabled": "[Generic] Enable Generic Charger",
+          "generic_charger_switch_entity": "[Generic] Charger Switch Entity",
+          "generic_charger_amps_entity": "[Generic] Charger Amps Entity",
+          "generic_charger_status_entity": "[Generic] Connector Status Sensor"
         },
         "data_description": {
           "ev_charging_enabled": "Enable smart charging control for Tesla vehicles. Not required for OCPP or Zaptec chargers.",
@@ -1038,7 +1050,11 @@
           "ocpp_port": "Port for OCPP WebSocket server. Default: 9000.",
           "zaptec_charger_entity": "Entity ID from the Zaptec HA integration (e.g. switch.zaptec_charger). Leave blank if not using Zaptec or if using standalone mode.",
           "zaptec_installation_id": "Installation device ID for current limiting. Found in the Zaptec HA integration device list. Leave blank to auto-detect.",
-          "zaptec_standalone_enabled": "Connect directly to Zaptec Cloud API without the Zaptec HA integration. You'll be prompted for your Zaptec account credentials on the next page."
+          "zaptec_standalone_enabled": "Connect directly to Zaptec Cloud API without the Zaptec HA integration. You'll be prompted for your Zaptec account credentials on the next page.",
+          "generic_charger_enabled": "Control any EV charger that has a switch and optional amps entity in Home Assistant (e.g. Evnex, Wallbox, or any charger with an HA integration).",
+          "generic_charger_switch_entity": "Entity ID of the switch that starts/stops charging (e.g. switch.evnex_charge_now). Required.",
+          "generic_charger_amps_entity": "Entity ID of the number that controls charge current in amps (e.g. number.evnex_connector_1_maximum_current). Leave blank if your charger doesn't support amp control.",
+          "generic_charger_status_entity": "Entity ID of a sensor that reports charger connector status (e.g. sensor.home_charger_connector_status). Used to detect if an EV is plugged in. Recognised states: charging, preparing, suspended_evse, suspended_ev, finishing. Leave blank to skip plug detection."
         },
         "submit_button": "Submit"
       },

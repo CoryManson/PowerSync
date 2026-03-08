@@ -330,6 +330,8 @@ async def is_ev_plugged_in(
         CONF_ZAPTEC_STANDALONE_ENABLED,
         CONF_ZAPTEC_USERNAME,
         CONF_OCPP_ENABLED,
+        CONF_GENERIC_CHARGER_ENABLED,
+        CONF_GENERIC_CHARGER_STATUS_ENTITY,
     )
     from homeassistant.helpers import entity_registry as er, device_registry as dr
 
@@ -367,6 +369,29 @@ async def is_ev_plugged_in(
                         return True
                 _LOGGER.debug("OCPP server found but no charge point has vehicle connected")
                 return False
+
+    # Generic charger — check connector status sensor
+    if config_entry:
+        opts = {**config_entry.data, **config_entry.options}
+        if opts.get(CONF_GENERIC_CHARGER_ENABLED):
+            status_entity = opts.get(CONF_GENERIC_CHARGER_STATUS_ENTITY, "")
+            if status_entity:
+                state = hass.states.get(status_entity)
+                if state:
+                    status = state.state.lower()
+                    plugged = status in (
+                        "charging", "preparing", "suspended_evse",
+                        "suspended_ev", "finishing",
+                    )
+                    _LOGGER.debug(
+                        "Generic charger plugged_in check: %s state=%s → %s",
+                        status_entity, state.state, plugged,
+                    )
+                    return plugged
+                else:
+                    _LOGGER.debug("Generic charger status entity %s not found", status_entity)
+            # No status entity configured — can't determine plug state,
+            # fall through (returns False at end of function)
 
     # Method 0: Teslemetry Bluetooth — check sensor.*_charging_state
     import re as _re
@@ -4892,7 +4917,7 @@ class PriceLevelChargingExecutor:
             vehicle_vin: Optional VIN for specific vehicle. If None, uses default.
         """
         # Zaptec standalone path — use Cloud API directly
-        from ..const import CONF_ZAPTEC_STANDALONE_ENABLED, CONF_ZAPTEC_USERNAME, CONF_ZAPTEC_CHARGER_ID, CONF_OCPP_ENABLED, CONF_ZAPTEC_INSTALLATION_ID_CLOUD
+        from ..const import CONF_ZAPTEC_STANDALONE_ENABLED, CONF_ZAPTEC_USERNAME, CONF_ZAPTEC_CHARGER_ID, CONF_OCPP_ENABLED, CONF_ZAPTEC_INSTALLATION_ID_CLOUD, CONF_GENERIC_CHARGER_ENABLED, CONF_GENERIC_CHARGER_SWITCH_ENTITY, CONF_GENERIC_CHARGER_AMPS_ENTITY
         opts = {**self.config_entry.data, **self.config_entry.options}
         if opts.get(CONF_ZAPTEC_STANDALONE_ENABLED) and opts.get(CONF_ZAPTEC_USERNAME):
             entry_data = self.hass.data.get(self._domain, {}).get(self.config_entry.entry_id, {})
@@ -4951,8 +4976,13 @@ class PriceLevelChargingExecutor:
                         _LOGGER.error(f"Price-level charging: Zaptec start failed: {e}")
                     return False
 
-        # Determine charger type — OCPP or Tesla
-        charger_type = "ocpp" if opts.get(CONF_OCPP_ENABLED) else "tesla"
+        # Determine charger type
+        if opts.get(CONF_GENERIC_CHARGER_ENABLED):
+            charger_type = "generic"
+        elif opts.get(CONF_OCPP_ENABLED):
+            charger_type = "ocpp"
+        else:
+            charger_type = "tesla"
 
         from .actions import _action_start_ev_charging_dynamic
 
@@ -4967,6 +4997,9 @@ class PriceLevelChargingExecutor:
             "charger_type": charger_type,
             "no_grid_import": self._get_settings().get("no_grid_import", False),
         }
+        if charger_type == "generic":
+            params["charger_switch_entity"] = opts.get(CONF_GENERIC_CHARGER_SWITCH_ENTITY, "")
+            params["charger_amps_entity"] = opts.get(CONF_GENERIC_CHARGER_AMPS_ENTITY, "")
 
         try:
             success = await _action_start_ev_charging_dynamic(
@@ -5536,7 +5569,7 @@ class ScheduledChargingExecutor:
     async def _start_charging(self, reason: str) -> bool:
         """Start EV charging."""
         # Zaptec standalone path
-        from ..const import CONF_ZAPTEC_STANDALONE_ENABLED, CONF_ZAPTEC_USERNAME, CONF_ZAPTEC_CHARGER_ID, CONF_OCPP_ENABLED
+        from ..const import CONF_ZAPTEC_STANDALONE_ENABLED, CONF_ZAPTEC_USERNAME, CONF_ZAPTEC_CHARGER_ID, CONF_OCPP_ENABLED, CONF_GENERIC_CHARGER_ENABLED, CONF_GENERIC_CHARGER_SWITCH_ENTITY, CONF_GENERIC_CHARGER_AMPS_ENTITY
         opts = {**self.config_entry.data, **self.config_entry.options}
         if opts.get(CONF_ZAPTEC_STANDALONE_ENABLED) and opts.get(CONF_ZAPTEC_USERNAME):
             entry_data = self.hass.data.get(self._domain, {}).get(self.config_entry.entry_id, {})
@@ -5555,7 +5588,12 @@ class ScheduledChargingExecutor:
                     return False
 
         # Determine charger type
-        charger_type = "ocpp" if opts.get(CONF_OCPP_ENABLED) else "tesla"
+        if opts.get(CONF_GENERIC_CHARGER_ENABLED):
+            charger_type = "generic"
+        elif opts.get(CONF_OCPP_ENABLED):
+            charger_type = "ocpp"
+        else:
+            charger_type = "tesla"
 
         from .actions import _action_start_ev_charging_dynamic
 
@@ -5569,6 +5607,9 @@ class ScheduledChargingExecutor:
             **_get_optimizer_battery_params(self.hass, self.config_entry),
             "charger_type": charger_type,
         }
+        if charger_type == "generic":
+            params["charger_switch_entity"] = opts.get(CONF_GENERIC_CHARGER_SWITCH_ENTITY, "")
+            params["charger_amps_entity"] = opts.get(CONF_GENERIC_CHARGER_AMPS_ENTITY, "")
 
         try:
             success = await _action_start_ev_charging_dynamic(
@@ -5776,7 +5817,7 @@ class EVChargingModeCoordinator:
     async def _start_charging(self, modes: List[str], reason: str) -> bool:
         """Start EV charging."""
         # Zaptec standalone path — use Cloud API directly
-        from ..const import CONF_ZAPTEC_STANDALONE_ENABLED, CONF_ZAPTEC_USERNAME, CONF_ZAPTEC_CHARGER_ID, CONF_OCPP_ENABLED
+        from ..const import CONF_ZAPTEC_STANDALONE_ENABLED, CONF_ZAPTEC_USERNAME, CONF_ZAPTEC_CHARGER_ID, CONF_OCPP_ENABLED, CONF_GENERIC_CHARGER_ENABLED, CONF_GENERIC_CHARGER_SWITCH_ENTITY, CONF_GENERIC_CHARGER_AMPS_ENTITY
         opts = {**self.config_entry.data, **self.config_entry.options}
         if opts.get(CONF_ZAPTEC_STANDALONE_ENABLED) and opts.get(CONF_ZAPTEC_USERNAME):
             entry_data = self.hass.data.get(self._domain, {}).get(self.config_entry.entry_id, {})
@@ -5794,8 +5835,13 @@ class EVChargingModeCoordinator:
                     _LOGGER.error(f"EV Coordinator: Zaptec start charging failed: {e}")
                     return False
 
-        # Determine charger type — OCPP or Tesla
-        charger_type = "ocpp" if opts.get(CONF_OCPP_ENABLED) else "tesla"
+        # Determine charger type
+        if opts.get(CONF_GENERIC_CHARGER_ENABLED):
+            charger_type = "generic"
+        elif opts.get(CONF_OCPP_ENABLED):
+            charger_type = "ocpp"
+        else:
+            charger_type = "tesla"
 
         from .actions import _action_start_ev_charging_dynamic
 
@@ -5809,6 +5855,9 @@ class EVChargingModeCoordinator:
             **_get_optimizer_battery_params(self.hass, self.config_entry),
             "charger_type": charger_type,
         }
+        if charger_type == "generic":
+            params["charger_switch_entity"] = opts.get(CONF_GENERIC_CHARGER_SWITCH_ENTITY, "")
+            params["charger_amps_entity"] = opts.get(CONF_GENERIC_CHARGER_AMPS_ENTITY, "")
 
         try:
             success = await _action_start_ev_charging_dynamic(

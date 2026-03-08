@@ -2175,11 +2175,11 @@ class OptimizationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         nameplate_power = site_info.get("nameplate_power", 0)
 
         if battery_count > 0 and nameplate_power > 0:
-            # nameplate_power is total site discharge power in watts
+            # nameplate_power is total site power in watts
             discharge_w = int(nameplate_power)
-            # Grid charge rate is limited by the gateway/inverter (~5kW per unit),
-            # which is typically lower than the discharge rate.
-            charge_w = min(discharge_w, 5000)
+            # Tesla firmware now allows charging at the full inverter rate
+            # (up to 10kW per battery unit)
+            charge_w = discharge_w
             # Estimate capacity: battery_count * 13.5 kWh per unit
             capacity_wh = int(battery_count * 13500)
 
@@ -2199,7 +2199,7 @@ class OptimizationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif battery_count > 0:
             # Have count but no nameplate — estimate power per unit
             capacity_wh = int(battery_count * 13500)
-            charge_w = 5000  # Conservative single gateway limit
+            charge_w = int(battery_count * 5000)
             discharge_w = int(battery_count * 5000)
 
             self._config.battery_capacity_wh = capacity_wh

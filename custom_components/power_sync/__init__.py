@@ -70,6 +70,7 @@ from .const import (
     SERVICE_SET_OPERATION_MODE,
     SERVICE_SET_GRID_EXPORT,
     SERVICE_SET_GRID_CHARGING,
+    SERVICE_SET_EXPORT_LIMIT,
     SERVICE_CURTAIL_INVERTER,
     SERVICE_RESTORE_INVERTER,
     DISCHARGE_DURATIONS,
@@ -182,6 +183,8 @@ from .const import (
     CONF_SIGENERGY_MODBUS_HOST,
     CONF_SIGENERGY_MODBUS_PORT,
     CONF_SIGENERGY_MODBUS_SLAVE_ID,
+    CONF_SIGENERGY_EXPORT_LIMIT_KW,
+    CONF_SIGENERGY_READ_ONLY,
     CONF_SIGENERGY_ACCESS_TOKEN,
     CONF_SIGENERGY_REFRESH_TOKEN,
     CONF_SIGENERGY_TOKEN_EXPIRES_AT,
@@ -3136,6 +3139,14 @@ class InverterStatusView(HomeAssistantView):
                 enphase_normal_profile=enphase_normal_profile,
                 enphase_zero_export_profile=enphase_zero_export_profile,
                 enphase_is_installer=enphase_is_installer,
+                sigenergy_export_limit_kw=entry.options.get(
+                    CONF_SIGENERGY_EXPORT_LIMIT_KW,
+                    entry.data.get(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+                ),
+                sigenergy_read_only=bool(entry.options.get(
+                    CONF_SIGENERGY_READ_ONLY,
+                    entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+                )),
             )
 
             if not controller:
@@ -10718,6 +10729,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 CONF_SIGENERGY_MODBUS_SLAVE_ID,
                 entry.data.get(CONF_SIGENERGY_MODBUS_SLAVE_ID, 1)
             )
+
+            # If export cap is unset, resolve the automatic cap once and persist it so
+            # the configuration field shows the effective value in UI.
+            configured_export_cap = entry.options.get(
+                CONF_SIGENERGY_EXPORT_LIMIT_KW,
+                entry.data.get(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+            )
+            if configured_export_cap in (None, ""):
+                try:
+                    from .inverters.sigenergy import SigenergyController
+
+                    resolver = SigenergyController(
+                        host=sigenergy_modbus_host,
+                        port=sigenergy_modbus_port,
+                        slave_id=sigenergy_modbus_slave_id,
+                        max_export_limit_kw=None,
+                        read_only=bool(entry.options.get(
+                            CONF_SIGENERGY_READ_ONLY,
+                            entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+                        )),
+                    )
+                    try:
+                        resolved_cap = await resolver.resolve_export_safety_cap_kw()
+                    finally:
+                        await resolver.disconnect()
+
+                    if resolved_cap is not None:
+                        new_options = dict(entry.options)
+                        new_options[CONF_SIGENERGY_EXPORT_LIMIT_KW] = round(float(resolved_cap), 3)
+                        hass.config_entries.async_update_entry(entry, options=new_options)
+                        _LOGGER.info(
+                            "Resolved Sigenergy auto export cap to %.3f kW and saved to configuration",
+                            resolved_cap,
+                        )
+                except Exception as err:
+                    _LOGGER.debug("Could not resolve initial Sigenergy auto export cap: %s", err)
+
             _LOGGER.info(
                 "Initializing Sigenergy Modbus coordinator: %s:%s (slave %s)",
                 sigenergy_modbus_host, sigenergy_modbus_port, sigenergy_modbus_slave_id
@@ -10727,6 +10775,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 sigenergy_modbus_host,
                 port=sigenergy_modbus_port,
                 slave_id=sigenergy_modbus_slave_id,
+                read_only=bool(entry.options.get(
+                    CONF_SIGENERGY_READ_ONLY,
+                    entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+                )),
                 entry_id=entry.entry_id,
             )
         else:
@@ -11909,6 +11961,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 enphase_normal_profile=enphase_normal_profile,
                 enphase_zero_export_profile=enphase_zero_export_profile,
                 enphase_is_installer=enphase_is_installer,
+                sigenergy_export_limit_kw=entry.options.get(
+                    CONF_SIGENERGY_EXPORT_LIMIT_KW,
+                    entry.data.get(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+                ),
+                sigenergy_read_only=bool(entry.options.get(
+                    CONF_SIGENERGY_READ_ONLY,
+                    entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+                )),
             )
 
             if not controller:
@@ -14501,6 +14561,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # NOTE: restore_force_mode_from_persistence is scheduled AFTER handle_restore_normal
     # is defined (see below), because it needs handle_restore_normal in its closure.
 
+    def _get_sigenergy_export_limit_kw() -> float | None:
+        """Get configured Sigenergy export safety cap in kW."""
+        raw = entry.options.get(
+            CONF_SIGENERGY_EXPORT_LIMIT_KW,
+            entry.data.get(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+        )
+        if raw in (None, ""):
+            return None
+        try:
+            value = float(raw)
+            return value if value >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    def _is_sigenergy_read_only() -> bool:
+        """Return True when Sigenergy writes must be blocked."""
+        return bool(
+            entry.options.get(
+                CONF_SIGENERGY_READ_ONLY,
+                entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+            )
+        )
+
     async def handle_force_discharge(call: ServiceCall) -> None:
         """Force discharge mode - switches to autonomous with high export tariff."""
         from homeassistant.util import dt as dt_util
@@ -14551,6 +14634,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     host=modbus_host,
                     port=modbus_port,
                     slave_id=modbus_slave_id,
+                    max_export_limit_kw=_get_sigenergy_export_limit_kw(),
+                    read_only=_is_sigenergy_read_only(),
                 )
 
                 # Enable Remote EMS + set discharge mode + set rate
@@ -15185,6 +15270,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     host=modbus_host,
                     port=modbus_port,
                     slave_id=modbus_slave_id,
+                    max_export_limit_kw=_get_sigenergy_export_limit_kw(),
+                    read_only=_is_sigenergy_read_only(),
                 )
 
                 # Cancel active discharge mode if switching to charge
@@ -15823,14 +15910,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         host=modbus_host,
                         port=modbus_port,
                         slave_id=modbus_slave_id,
+                        max_export_limit_kw=_get_sigenergy_export_limit_kw(),
+                        read_only=_is_sigenergy_read_only(),
                     )
 
-                    # Disable Remote EMS — return to native EMS behavior
+                    # Keep Remote EMS enabled and switch to self-consumption mode
                     result = await controller.restore_normal()
                     await controller.disconnect()
 
                     if result:
-                        _LOGGER.info("✅ Sigenergy normal operation restored (Remote EMS disabled)")
+                        _LOGGER.info("✅ Sigenergy normal operation restored in Remote EMS")
                     else:
                         _LOGGER.warning("Sigenergy restore_normal failed")
 
@@ -16373,14 +16462,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         host=modbus_host,
                         port=modbus_port,
                         slave_id=modbus_slave_id,
+                        max_export_limit_kw=_get_sigenergy_export_limit_kw(),
+                        read_only=_is_sigenergy_read_only(),
                     )
 
-                    # Disable Remote EMS — return to native EMS (self-consumption)
+                    # Keep Remote EMS enabled and switch to self-consumption mode
                     result = await controller.restore_normal()
                     await controller.disconnect()
 
                     if result:
-                        _LOGGER.info("✅ Sigenergy self-consumption mode set (Remote EMS disabled)")
+                        _LOGGER.info("✅ Sigenergy self-consumption mode set in Remote EMS")
                     else:
                         _LOGGER.warning("Sigenergy self-consumption restore_normal failed")
                 return
@@ -16583,6 +16674,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     host=modbus_host,
                     port=modbus_port,
                     slave_id=modbus_slave_id,
+                    max_export_limit_kw=_get_sigenergy_export_limit_kw(),
+                    read_only=_is_sigenergy_read_only(),
                 )
 
                 success = await controller.set_backup_reserve(percent)
@@ -16782,6 +16875,70 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.error(f"Error setting grid charging: {e}", exc_info=True)
 
+    async def handle_set_export_limit(call: ServiceCall) -> None:
+        """Set Sigenergy export safety cap and apply it immediately."""
+        is_sigenergy = bool(entry.data.get(CONF_SIGENERGY_STATION_ID))
+        if not is_sigenergy:
+            _LOGGER.error("set_export_limit is only supported for Sigenergy systems")
+            return
+
+        limit_kw = call.data.get("limit_kw")
+
+        if limit_kw is None:
+            _LOGGER.error("Missing 'limit_kw' parameter for set_export_limit")
+            return
+
+        try:
+            from .inverters.sigenergy import SigenergyController
+
+            modbus_host = entry.options.get(
+                CONF_SIGENERGY_MODBUS_HOST,
+                entry.data.get(CONF_SIGENERGY_MODBUS_HOST)
+            )
+            if not modbus_host:
+                _LOGGER.error("set_export_limit: Sigenergy Modbus host not configured")
+                return
+
+            modbus_port = entry.options.get(
+                CONF_SIGENERGY_MODBUS_PORT,
+                entry.data.get(CONF_SIGENERGY_MODBUS_PORT, 502)
+            )
+            modbus_slave_id = entry.options.get(
+                CONF_SIGENERGY_MODBUS_SLAVE_ID,
+                entry.data.get(CONF_SIGENERGY_MODBUS_SLAVE_ID, 1)
+            )
+
+            try:
+                limit_kw = max(0.0, float(limit_kw))
+            except (TypeError, ValueError):
+                _LOGGER.error("Invalid 'limit_kw' value for set_export_limit: %s", limit_kw)
+                return
+
+            # Persist as integration safety setting.
+            new_options = dict(entry.options)
+            new_options[CONF_SIGENERGY_EXPORT_LIMIT_KW] = limit_kw
+            hass.config_entries.async_update_entry(entry, options=new_options)
+
+            controller = SigenergyController(
+                host=modbus_host,
+                port=modbus_port,
+                slave_id=modbus_slave_id,
+                max_export_limit_kw=limit_kw,
+                read_only=_is_sigenergy_read_only(),
+            )
+
+            try:
+                success = await controller.set_export_limit(limit_kw)
+                if success:
+                    _LOGGER.info("✅ Sigenergy export safety cap set and applied: %.2f kW", limit_kw)
+                else:
+                    _LOGGER.error("Failed to set Sigenergy export limit to %.2f kW", limit_kw)
+            finally:
+                await controller.disconnect()
+
+        except Exception as e:
+            _LOGGER.error(f"Error setting Sigenergy export limit: {e}", exc_info=True)
+
     # Register force discharge, force charge, and restore normal services
     hass.services.async_register(DOMAIN, SERVICE_FORCE_DISCHARGE, handle_force_discharge)
     hass.services.async_register(DOMAIN, SERVICE_FORCE_CHARGE, handle_force_charge)
@@ -16798,6 +16955,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN, SERVICE_SET_OPERATION_MODE, handle_set_operation_mode)
     hass.services.async_register(DOMAIN, SERVICE_SET_GRID_EXPORT, handle_set_grid_export)
     hass.services.async_register(DOMAIN, SERVICE_SET_GRID_CHARGING, handle_set_grid_charging)
+    hass.services.async_register(DOMAIN, SERVICE_SET_EXPORT_LIMIT, handle_set_export_limit)
     hass.services.async_register(DOMAIN, "set_grid_export_auto", handle_set_grid_export_auto)
 
     _LOGGER.info("🔋 Force charge/discharge, restore, and Powerwall settings services registered")
@@ -16899,6 +17057,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 enphase_normal_profile=enphase_normal_profile,
                 enphase_zero_export_profile=enphase_zero_export_profile,
                 enphase_is_installer=enphase_is_installer,
+                sigenergy_export_limit_kw=entry.options.get(
+                    CONF_SIGENERGY_EXPORT_LIMIT_KW,
+                    entry.data.get(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+                ),
+                sigenergy_read_only=bool(entry.options.get(
+                    CONF_SIGENERGY_READ_ONLY,
+                    entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+                )),
             )
 
             home_load_w = None
@@ -17034,6 +17200,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 enphase_normal_profile=enphase_normal_profile,
                 enphase_zero_export_profile=enphase_zero_export_profile,
                 enphase_is_installer=enphase_is_installer,
+                sigenergy_export_limit_kw=entry.options.get(
+                    CONF_SIGENERGY_EXPORT_LIMIT_KW,
+                    entry.data.get(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+                ),
+                sigenergy_read_only=bool(entry.options.get(
+                    CONF_SIGENERGY_READ_ONLY,
+                    entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+                )),
             )
 
             _LOGGER.info(f"🟢 Restoring {inverter_brand} inverter at {inverter_host}")

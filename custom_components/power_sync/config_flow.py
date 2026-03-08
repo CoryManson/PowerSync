@@ -81,6 +81,8 @@ from .const import (
     CONF_SIGENERGY_MODBUS_HOST,
     CONF_SIGENERGY_MODBUS_PORT,
     CONF_SIGENERGY_MODBUS_SLAVE_ID,
+    CONF_SIGENERGY_EXPORT_LIMIT_KW,
+    CONF_SIGENERGY_READ_ONLY,
     DEFAULT_SIGENERGY_MODBUS_PORT,
     DEFAULT_SIGENERGY_MODBUS_SLAVE_ID,
     CONF_AEMO_SPIKE_ENABLED,
@@ -1326,6 +1328,14 @@ class TeslaAmberSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._sigenergy_data[CONF_SIGENERGY_MODBUS_SLAVE_ID] = user_input.get(
                     CONF_SIGENERGY_MODBUS_SLAVE_ID, DEFAULT_SIGENERGY_MODBUS_SLAVE_ID
                 )
+                export_limit_kw = user_input.get(CONF_SIGENERGY_EXPORT_LIMIT_KW)
+                if export_limit_kw in (None, ""):
+                    self._sigenergy_data.pop(CONF_SIGENERGY_EXPORT_LIMIT_KW, None)
+                else:
+                    self._sigenergy_data[CONF_SIGENERGY_EXPORT_LIMIT_KW] = float(export_limit_kw)
+                self._sigenergy_data[CONF_SIGENERGY_READ_ONLY] = user_input.get(
+                    CONF_SIGENERGY_READ_ONLY, False
+                )
                 # Go to optional DC curtailment configuration
                 return await self.async_step_sigenergy_dc_curtailment()
 
@@ -1341,6 +1351,14 @@ class TeslaAmberSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_SIGENERGY_MODBUS_SLAVE_ID,
                     default=DEFAULT_SIGENERGY_MODBUS_SLAVE_ID,
                 ): int,
+                vol.Optional(
+                    CONF_SIGENERGY_EXPORT_LIMIT_KW,
+                    default=None,
+                ): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0.0, max=100.0))),
+                vol.Optional(
+                    CONF_SIGENERGY_READ_ONLY,
+                    default=False,
+                ): bool,
             }),
             errors=errors,
         )
@@ -3347,6 +3365,15 @@ class TeslaAmberSyncOptionsFlow(config_entries.OptionsFlow):
                 new_data[CONF_SIGENERGY_MODBUS_SLAVE_ID] = user_input.get(
                     CONF_SIGENERGY_MODBUS_SLAVE_ID, DEFAULT_SIGENERGY_MODBUS_SLAVE_ID
                 )
+                export_limit_kw = user_input.get(CONF_SIGENERGY_EXPORT_LIMIT_KW)
+                if export_limit_kw in (None, ""):
+                    new_data.pop(CONF_SIGENERGY_EXPORT_LIMIT_KW, None)
+                else:
+                    new_data[CONF_SIGENERGY_EXPORT_LIMIT_KW] = float(export_limit_kw)
+                new_data[CONF_SIGENERGY_READ_ONLY] = user_input.get(
+                    CONF_SIGENERGY_READ_ONLY,
+                    self._get_option(CONF_SIGENERGY_READ_ONLY, False),
+                )
                 new_data[CONF_SIGENERGY_DC_CURTAILMENT_ENABLED] = user_input.get(
                     CONF_SIGENERGY_DC_CURTAILMENT_ENABLED, False
                 )
@@ -3404,6 +3431,8 @@ class TeslaAmberSyncOptionsFlow(config_entries.OptionsFlow):
         current_modbus_host = self._get_option(CONF_SIGENERGY_MODBUS_HOST, "")
         current_modbus_port = self._get_option(CONF_SIGENERGY_MODBUS_PORT, DEFAULT_SIGENERGY_MODBUS_PORT)
         current_modbus_slave_id = self._get_option(CONF_SIGENERGY_MODBUS_SLAVE_ID, DEFAULT_SIGENERGY_MODBUS_SLAVE_ID)
+        current_export_limit_kw = self._get_option(CONF_SIGENERGY_EXPORT_LIMIT_KW, None)
+        current_read_only = self._get_option(CONF_SIGENERGY_READ_ONLY, False)
         current_dc_curtailment = self._get_option(CONF_SIGENERGY_DC_CURTAILMENT_ENABLED, False)
         current_opt_provider = self.config_entry.data.get(CONF_OPTIMIZATION_PROVIDER, OPT_PROVIDER_NATIVE)
         current_backup_reserve = self.config_entry.data.get(CONF_OPTIMIZATION_BACKUP_RESERVE, DEFAULT_OPTIMIZATION_BACKUP_RESERVE)
@@ -3448,6 +3477,14 @@ class TeslaAmberSyncOptionsFlow(config_entries.OptionsFlow):
                         CONF_SIGENERGY_MODBUS_SLAVE_ID,
                         default=current_modbus_slave_id,
                     ): int,
+                    vol.Optional(
+                        CONF_SIGENERGY_EXPORT_LIMIT_KW,
+                        default=current_export_limit_kw,
+                    ): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0.0, max=100.0))),
+                    vol.Optional(
+                        CONF_SIGENERGY_READ_ONLY,
+                        default=current_read_only,
+                    ): bool,
                     vol.Optional(
                         CONF_SIGENERGY_DC_CURTAILMENT_ENABLED,
                         default=current_dc_curtailment,

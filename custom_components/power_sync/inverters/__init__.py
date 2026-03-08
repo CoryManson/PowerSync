@@ -223,6 +223,8 @@ def get_inverter_controller(
     enphase_normal_profile: Optional[str] = None,
     enphase_zero_export_profile: Optional[str] = None,
     enphase_is_installer: bool = False,
+    sigenergy_export_limit_kw: Optional[float] = None,
+    sigenergy_read_only: bool = False,
 ) -> Optional[InverterController]:
     """Factory function to get the appropriate inverter controller.
 
@@ -241,6 +243,8 @@ def get_inverter_controller(
         enphase_normal_profile: Grid profile name for normal operation (fallback)
         enphase_zero_export_profile: Grid profile name for zero export (fallback)
         enphase_is_installer: Whether user has installer-level Enlighten access
+        sigenergy_export_limit_kw: Optional Sigenergy export safety cap in kW
+        sigenergy_read_only: If True, Sigenergy controller blocks all writes
 
     Returns:
         InverterController instance or None if brand not supported
@@ -338,6 +342,8 @@ def get_inverter_controller(
             port=port,
             slave_id=slave_id,
             model=model,
+            max_export_limit_kw=sigenergy_export_limit_kw,
+            read_only=sigenergy_read_only,
         )
 
     if brand_lower == "foxess":

@@ -115,6 +115,8 @@ from .const import (
     CONF_ENPHASE_NORMAL_PROFILE,
     CONF_ENPHASE_ZERO_EXPORT_PROFILE,
     CONF_FRONIUS_LOAD_FOLLOWING,
+    CONF_SIGENERGY_EXPORT_LIMIT_KW,
+    CONF_SIGENERGY_READ_ONLY,
     CONF_DEMAND_CHARGE_ENABLED,
     CONF_DEMAND_CHARGE_RATE,
     CONF_DEMAND_CHARGE_START_TIME,
@@ -1943,6 +1945,8 @@ class InverterStatusSensor(SensorEntity):
                     enphase_normal_profile=enphase_normal_profile,
                     enphase_zero_export_profile=enphase_zero_export_profile,
                     enphase_is_installer=enphase_is_installer,
+                    sigenergy_export_limit_kw=self._get_config_value(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+                    sigenergy_read_only=self._get_config_value(CONF_SIGENERGY_READ_ONLY, False),
                 )
                 if controller:
                     controller._cache_key = controller_key

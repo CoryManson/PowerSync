@@ -333,11 +333,15 @@
         "data": {
           "sigenergy_modbus_host": "Sigenergy IP Address",
           "sigenergy_modbus_port": "Modbus Port",
-          "sigenergy_modbus_slave_id": "Modbus Slave ID"
+          "sigenergy_modbus_slave_id": "Modbus Slave ID",
+          "sigenergy_export_limit_kw": "Maximum Export Limit (kW)",
+          "sigenergy_read_only": "Read-Only Mode"
         },
         "data_description": {
           "sigenergy_modbus_host": "Local IP address of your Sigenergy inverter (e.g., 192.168.1.100)",
-          "sigenergy_modbus_slave_id": "Leave at 247 (default). PowerSync auto-detects the correct registers and slave ID."
+          "sigenergy_modbus_slave_id": "Leave at 247 (default). PowerSync auto-detects the correct registers and slave ID.",
+          "sigenergy_export_limit_kw": "DNSP grid export limit. Leave blank to auto-use ESS rated charge/discharge power.",
+          "sigenergy_read_only": "When enabled, PowerSync reads Modbus data only and blocks all write commands (safe testing mode)."
         },
         "submit_button": "Next"
       },
@@ -577,6 +581,8 @@
           "sigenergy_modbus_host": "Sigenergy IP Address",
           "sigenergy_modbus_port": "Modbus Port",
           "sigenergy_modbus_slave_id": "Modbus Slave ID",
+          "sigenergy_export_limit_kw": "Maximum Export Limit (kW)",
+          "sigenergy_read_only": "Read-Only Mode",
           "sigenergy_dc_curtailment_enabled": "Enable DC Solar Curtailment",
           "sigenergy_username": "Sigenergy Cloud Email",
           "sigenergy_password": "Password",
@@ -586,6 +592,8 @@
         },
         "data_description": {
           "sigenergy_modbus_host": "Local IP address of your Sigenergy inverter (e.g., 192.168.1.100)",
+          "sigenergy_export_limit_kw": "Optional safety cap for export to grid. Leave blank to auto-use ESS rated charge/discharge power.",
+          "sigenergy_read_only": "When enabled, PowerSync reads Modbus data only and blocks all write commands (safe testing mode).",
           "sigenergy_dc_curtailment_enabled": "Allow PowerSync to limit DC solar production during negative prices",
           "sigenergy_username": "Your Sigenergy Cloud account email address",
           "sigenergy_password": "Your Sigenergy account password (leave blank to keep existing)",

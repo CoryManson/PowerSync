@@ -772,6 +772,8 @@ async def _get_sigenergy_controller(config_entry: ConfigEntry) -> Optional["Sige
         SigenergyController instance or None if not configured
     """
     from ..const import (
+        CONF_SIGENERGY_EXPORT_LIMIT_KW,
+        CONF_SIGENERGY_READ_ONLY,
         CONF_SIGENERGY_MODBUS_HOST,
         CONF_SIGENERGY_MODBUS_PORT,
         CONF_SIGENERGY_MODBUS_SLAVE_ID,
@@ -796,10 +798,23 @@ async def _get_sigenergy_controller(config_entry: ConfigEntry) -> Optional["Sige
         config_entry.data.get(CONF_SIGENERGY_MODBUS_SLAVE_ID, 1)
     )
 
+    max_export_limit_kw = config_entry.options.get(
+        CONF_SIGENERGY_EXPORT_LIMIT_KW,
+        config_entry.data.get(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+    )
+    read_only = bool(
+        config_entry.options.get(
+            CONF_SIGENERGY_READ_ONLY,
+            config_entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+        )
+    )
+
     return SigenergyController(
         host=modbus_host,
         port=modbus_port,
         slave_id=modbus_slave_id,
+        max_export_limit_kw=max_export_limit_kw,
+        read_only=read_only,
     )
 
 
@@ -1316,7 +1331,7 @@ async def _action_restore_normal(
 ) -> bool:
     """Restore normal battery operation (cancel force charge/discharge)."""
     if _is_sigenergy(config_entry):
-        # Sigenergy: Disable Remote EMS to return to native EMS
+        # Sigenergy: Keep Remote EMS enabled and switch to self-consumption mode
         controller = await _get_sigenergy_controller(config_entry)
         if not controller:
             _LOGGER.error("restore_normal: Sigenergy Modbus not configured")
@@ -1324,7 +1339,7 @@ async def _action_restore_normal(
         try:
             result = await controller.restore_normal()
             if result:
-                _LOGGER.info("Sigenergy: Restored normal operation (Remote EMS disabled)")
+                _LOGGER.info("Sigenergy: Restored normal operation in Remote EMS")
                 return True
             else:
                 _LOGGER.error("Sigenergy restore_normal() failed")
@@ -1431,8 +1446,10 @@ async def _action_set_export_limit(
         return False
 
     # Accept both "limit" and "export_limit_kw" for flexibility
-    # None means unlimited
     limit_kw = params.get("limit") or params.get("export_limit_kw")
+    if limit_kw is None:
+        _LOGGER.error("set_export_limit: missing limit parameter")
+        return False
 
     controller = await _get_sigenergy_controller(config_entry)
     if not controller:
@@ -1440,15 +1457,10 @@ async def _action_set_export_limit(
         return False
 
     try:
-        if limit_kw is None:
-            # Unlimited export
-            result = await controller.restore_export_limit()
-            _LOGGER.info("Restored unlimited export")
-        else:
-            # Clamp to valid range (0-10 kW typical)
-            limit_kw = max(0, min(10, float(limit_kw)))
-            result = await controller.set_export_limit(limit_kw)
-            _LOGGER.info(f"Set export limit to {limit_kw} kW")
+        # Clamp to valid range (0-100 kW protocol range)
+        limit_kw = max(0, min(100, float(limit_kw)))
+        result = await controller.set_export_limit(limit_kw)
+        _LOGGER.info(f"Set export limit to {limit_kw} kW")
         return result
     except Exception as e:
         _LOGGER.error(f"Failed to set export limit: {e}")

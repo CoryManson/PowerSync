@@ -4119,6 +4119,8 @@ class AutoScheduleExecutor:
     async def _get_sigenergy_controller(self):
         """Get a SigEnergy controller instance."""
         from ..const import (
+            CONF_SIGENERGY_EXPORT_LIMIT_KW,
+            CONF_SIGENERGY_READ_ONLY,
             CONF_SIGENERGY_MODBUS_HOST,
             CONF_SIGENERGY_MODBUS_PORT,
             CONF_SIGENERGY_MODBUS_SLAVE_ID,
@@ -4142,10 +4144,23 @@ class AutoScheduleExecutor:
             self.config_entry.data.get(CONF_SIGENERGY_MODBUS_SLAVE_ID, 247)
         )
 
+        max_export_limit_kw = self.config_entry.options.get(
+            CONF_SIGENERGY_EXPORT_LIMIT_KW,
+            self.config_entry.data.get(CONF_SIGENERGY_EXPORT_LIMIT_KW),
+        )
+        read_only = bool(
+            self.config_entry.options.get(
+                CONF_SIGENERGY_READ_ONLY,
+                self.config_entry.data.get(CONF_SIGENERGY_READ_ONLY, False),
+            )
+        )
+
         return SigenergyController(
             host=modbus_host,
             port=modbus_port,
             slave_id=modbus_slave_id,
+            max_export_limit_kw=max_export_limit_kw,
+            read_only=read_only,
         )
 
     async def _get_current_backup_reserve(self) -> Optional[int]:

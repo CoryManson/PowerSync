@@ -2188,6 +2188,7 @@ class SigenergyEnergyCoordinator(DataUpdateCoordinator):
         host: str,
         port: int = 502,
         slave_id: int = 1,
+        read_only: bool = False,
         entry_id: str = "",
     ) -> None:
         """Initialize the coordinator.
@@ -2197,6 +2198,7 @@ class SigenergyEnergyCoordinator(DataUpdateCoordinator):
             host: IP address of Sigenergy system
             port: Modbus TCP port (default: 502)
             slave_id: Modbus slave ID (default: 1)
+            read_only: If True, block all Modbus write operations
             entry_id: Config entry ID for price lookups
         """
         from .inverters.sigenergy import SigenergyController
@@ -2204,8 +2206,9 @@ class SigenergyEnergyCoordinator(DataUpdateCoordinator):
         self.host = host
         self.port = port
         self.slave_id = slave_id
+        self.read_only = read_only
         self._entry_id = entry_id
-        self._controller = SigenergyController(host, port, slave_id)
+        self._controller = SigenergyController(host, port, slave_id, read_only=read_only)
         self._energy_acc = EnergyAccumulator(hass, "sigenergy")
 
         super().__init__(
@@ -2256,6 +2259,7 @@ class SigenergyEnergyCoordinator(DataUpdateCoordinator):
                 # Extra Sigenergy-specific data
                 "active_power_kw": attrs.get("active_power_kw", 0),
                 "export_limit_kw": attrs.get("export_limit_kw"),
+                "pcs_export_limit_kw": attrs.get("pcs_export_limit_kw"),
                 "ems_work_mode": attrs.get("ems_work_mode"),
                 "is_curtailed": status.is_curtailed,
                 # Battery health data

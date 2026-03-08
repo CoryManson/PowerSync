@@ -289,6 +289,8 @@ CONF_SIGENERGY_DC_CURTAILMENT_ENABLED = "sigenergy_dc_curtailment_enabled"
 CONF_SIGENERGY_MODBUS_HOST = "sigenergy_modbus_host"
 CONF_SIGENERGY_MODBUS_PORT = "sigenergy_modbus_port"
 CONF_SIGENERGY_MODBUS_SLAVE_ID = "sigenergy_modbus_slave_id"
+CONF_SIGENERGY_EXPORT_LIMIT_KW = "sigenergy_export_limit_kw"
+CONF_SIGENERGY_READ_ONLY = "sigenergy_read_only"
 DEFAULT_SIGENERGY_MODBUS_PORT = 502
 DEFAULT_SIGENERGY_MODBUS_SLAVE_ID = 247  # Sigenergy uses unit ID 247 (or 0)
 
@@ -827,6 +829,7 @@ SERVICE_SET_BACKUP_RESERVE = "set_backup_reserve"
 SERVICE_SET_OPERATION_MODE = "set_operation_mode"
 SERVICE_SET_GRID_EXPORT = "set_grid_export"
 SERVICE_SET_GRID_CHARGING = "set_grid_charging"
+SERVICE_SET_EXPORT_LIMIT = "set_export_limit"
 SERVICE_CURTAIL_INVERTER = "curtail_inverter"
 SERVICE_RESTORE_INVERTER = "restore_inverter"
 

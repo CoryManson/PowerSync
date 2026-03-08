@@ -159,6 +159,22 @@ set_grid_charging:
       selector:
         boolean:
 
+set_export_limit:
+  name: Set Export Limit
+  description: Set Sigenergy maximum allowed grid export limit (safety cap)
+  fields:
+    limit_kw:
+      name: Export Limit (kW)
+      description: Maximum allowed export power in kW
+      required: true
+      example: 7.5
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 0.5
+          unit_of_measurement: kW
+
 get_calendar_history:
   name: Get Calendar History
   description: Fetch energy history from Tesla API for mobile app energy summaries
